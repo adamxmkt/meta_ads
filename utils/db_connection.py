@@ -5,7 +5,7 @@
 
 import pymysql
 import pandas as pd
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Dict, Any
 import streamlit as st
 
 
@@ -39,13 +39,13 @@ class DatabaseConnection:
     def get_connection(self):
         """获取数据库连接"""
         try:
-            # 使用标准 Cursor，不使用 DictCursor
             connection = pymysql.connect(
                 host=self.host,
                 user=self.user,
                 password=self.password,
                 database=self.database,
                 charset=self.charset,
+                cursorclass=pymysql.cursors.DictCursor,
                 connect_timeout=10
             )
             return connection
@@ -53,7 +53,35 @@ class DatabaseConnection:
             st.error(f"❌ 数据库连接失败: {e}")
             return None
     
-    def query_to_dataframe(self, query: str, params: Optional[Tuple] = None) -> Optional[pd.DataFrame]:
+    def execute_query(self, query: str, params: Optional[tuple] = None) -> Optional[List[Dict[str, Any]]]:
+        """
+        执行查询并返回结果
+        
+        Args:
+            query: SQL 查询语句
+            params: 查询参数
+            
+        Returns:
+            查询结果列表
+        """
+        connection = self.get_connection()
+        if connection is None:
+            return None
+        
+        try:
+            with connection.cursor() as cursor:
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+                result = cursor.fetchall()
+            connection.close()
+            return result
+        except pymysql.Error as e:
+            st.error(f"❌ 查询执行失败: {e}")
+            return None
+    
+    def query_to_dataframe(self, query: str, params: Optional[tuple] = None) -> Optional[pd.DataFrame]:
         """
         执行查询并返回 DataFrame
         
@@ -69,8 +97,8 @@ class DatabaseConnection:
             return None
         
         try:
+            # 使用 pymysql 直接执行查询并转换为 DataFrame
             with connection.cursor() as cursor:
-                # 执行查询
                 if params:
                     cursor.execute(query, params)
                 else:
@@ -94,8 +122,7 @@ class DatabaseConnection:
             return df
         
         except Exception as e:
-            st.error(f"❌ 查询执行失败: {str(e)}")
-            connection.close()
+            st.error(f"❌ 查询执行失败: {e}")
             return None
 
 
@@ -105,67 +132,54 @@ def get_db_connection() -> DatabaseConnection:
     从 Streamlit Secrets 读取配置
     """
     try:
-        # 尝试多种方式读取数据库配置
-        db_config = None
+        # 直接从 st.secrets 读取数据库配置
+        host = st.secrets.get("database_host") or st.secrets.get("host")
+        user = st.secrets.get("database_user") or st.secrets.get("user")
+        password = st.secrets.get("database_password") or st.secrets.get("password")
+        database = st.secrets.get("database_name") or st.secrets.get("database")
         
-        # 方式 1: 直接读取顶级键
-        try:
-            if "database_host" in st.secrets:
-                db_config = {
-                    "host": st.secrets.get("database_host"),
-                    "user": st.secrets.get("database_user"),
-                    "password": st.secrets.get("database_password"),
-                    "database": st.secrets.get("database_name")
-                }
-        except:
-            pass
-        
-        # 方式 2: 读取 [database] 表
-        if not db_config or not all(db_config.values()):
+        # 如果上面的方式都不行，尝试读取 [database] 表
+        if not all([host, user, password, database]):
             try:
-                db_section = st.secrets.get("database", {})
-                if isinstance(db_section, dict):
-                    db_config = {
-                        "host": db_section.get("host"),
-                        "user": db_section.get("user"),
-                        "password": db_section.get("password"),
-                        "database": db_section.get("database")
-                    }
-            except:
+                db_section = st.secrets["database"]
+                host = db_section.get("host") or host
+                user = db_section.get("user") or user
+                password = db_section.get("password") or password
+                database = db_section.get("database") or database
+            except (KeyError, TypeError):
                 pass
         
-        # 方式 3: 使用简化的键名
-        if not db_config or not all(db_config.values()):
-            try:
-                db_config = {
-                    "host": st.secrets.get("host"),
-                    "user": st.secrets.get("user"),
-                    "password": st.secrets.get("password"),
-                    "database": st.secrets.get("database")
-                }
-            except:
-                pass
-        
-        # 验证配置
-        if not db_config or not all(db_config.values()):
+        # 验证所有必要的字段都已配置
+        if not all([host, user, password, database]):
+            missing = []
+            if not host:
+                missing.append("host")
+            if not user:
+                missing.append("user")
+            if not password:
+                missing.append("password")
+            if not database:
+                missing.append("database")
+            
             st.error(
-                "❌ 数据库配置未找到！\n\n"
-                "请在 Streamlit Cloud 的 Settings → Secrets 中添加：\n\n"
-                "```toml\n"
-                "[database]\n"
-                "host = \"203.55.176.41\"\n"
-                "user = \"fb_ads_admin\"\n"
-                "password = \"your_password\"\n"
-                "database = \"facebook_ads_data\"\n"
-                "```"
+                f"❌ 数据库配置不完整！\n\n"
+                f"缺少以下字段：{', '.join(missing)}\n\n"
+                f"请在 Streamlit Cloud 的 Settings → Secrets 中添加：\n\n"
+                f"```\n"
+                f"[database]\n"
+                f"host = \"203.55.176.41\"\n"
+                f"user = \"fb_ads_admin\"\n"
+                f"password = \"your_password\"\n"
+                f"database = \"facebook_ads_data\"\n"
+                f"```"
             )
-            raise ValueError("数据库配置未找到")
+            raise ValueError(f"数据库配置不完整，缺少字段：{missing}")
         
         return DatabaseConnection(
-            host=db_config["host"],
-            user=db_config["user"],
-            password=db_config["password"],
-            database=db_config["database"]
+            host=host,
+            user=user,
+            password=password,
+            database=database
         )
     
     except Exception as e:
