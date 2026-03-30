@@ -111,29 +111,63 @@ def get_db_connection() -> DatabaseConnection:
     获取缓存的数据库连接对象
     使用 Streamlit 的缓存来避免重复创建连接
     """
-    # 从 Streamlit secrets 读取数据库配置
-    db_config = st.secrets.get("database", {})
-    
-    # 如果没有配置，抛出错误
-    if not db_config:
-        st.error(
-            "❌ 数据库配置未找到！\n\n"
-            "请在 .streamlit/secrets.toml 中配置数据库信息：\n\n"
-            "```\n"
-            "[database]\n"
-            "host = \"your_host\"\n"
-            "user = \"your_user\"\n"
-            "password = \"your_password\"\n"
-            "database = \"your_database\"\n"
-            "```"
+    try:
+        # 尝试从 Streamlit secrets 读取数据库配置
+        # 处理不同的 Secrets 格式
+        
+        # 方式 1: 使用字典访问
+        if hasattr(st.secrets, "database"):
+            db_config = st.secrets["database"]
+        else:
+            # 方式 2: 使用 get 方法
+            db_config = st.secrets.get("database", {})
+        
+        # 确保 db_config 是字典
+        if isinstance(db_config, str):
+            st.error(
+                "❌ 数据库配置格式错误！\n\n"
+                "Secrets 应该是一个表 [database]，而不是字符串。\n\n"
+                "正确格式：\n"
+                "```\n"
+                "[database]\n"
+                "host = \"your_host\"\n"
+                "user = \"your_user\"\n"
+                "password = \"your_password\"\n"
+                "database = \"your_database\"\n"
+                "```"
+            )
+            raise ValueError("数据库配置格式错误")
+        
+        # 如果没有配置，抛出错误
+        if not db_config or not isinstance(db_config, dict):
+            st.error(
+                "❌ 数据库配置未找到！\n\n"
+                "请在 Streamlit Cloud 的 Settings → Secrets 中添加：\n\n"
+                "```\n"
+                "[database]\n"
+                "host = \"203.55.176.41\"\n"
+                "user = \"fb_ads_admin\"\n"
+                "password = \"your_password\"\n"
+                "database = \"facebook_ads_data\"\n"
+                "```"
+            )
+            raise ValueError("数据库配置未找到或格式错误")
+        
+        # 检查必要的字段
+        required_fields = ["host", "user", "password", "database"]
+        missing_fields = [field for field in required_fields if field not in db_config]
+        
+        if missing_fields:
+            st.error(f"❌ 数据库配置缺少以下字段：{', '.join(missing_fields)}")
+            raise ValueError(f"数据库配置缺少字段：{missing_fields}")
+        
+        return DatabaseConnection(
+            host=db_config["host"],
+            user=db_config["user"],
+            password=db_config["password"],
+            database=db_config["database"]
         )
-        raise ValueError(
-            "数据库配置未找到。请在 .streamlit/secrets.toml 中配置数据库信息。"
-        )
     
-    return DatabaseConnection(
-        host=db_config.get("host"),
-        user=db_config.get("user"),
-        password=db_config.get("password"),
-        database=db_config.get("database")
-    )
+    except Exception as e:
+        st.error(f"❌ 数据库连接配置错误：{str(e)}")
+        raise
