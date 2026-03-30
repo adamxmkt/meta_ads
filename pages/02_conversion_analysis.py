@@ -138,8 +138,8 @@ if conversion_data is not None and not conversion_data.empty:
     fig_daily.update_layout(
         title="每日转化数和转化价值",
         xaxis=dict(title="日期"),
-        yaxis=dict(title="转化数", titlefont=dict(color="#636EFA"), tickfont=dict(color="#636EFA")),
-        yaxis2=dict(title="转化价值 ($)", titlefont=dict(color="#EF553B"), tickfont=dict(color="#EF553B"), overlaying="y", side="right"),
+        yaxis=dict(title="转化数", title_font=dict(color="#636EFA"), tickfont=dict(color="#636EFA")),
+        yaxis2=dict(title="转化价值 ($)", title_font=dict(color="#EF553B"), tickfont=dict(color="#EF553B"), overlaying="y", side="right"),
         hovermode="x unified",
         height=500
     )
