@@ -97,9 +97,30 @@ class DatabaseConnection:
             return None
         
         try:
-            df = pd.read_sql(query, connection, params=params)
+            # 使用 pymysql 直接执行查询并转换为 DataFrame
+            with connection.cursor() as cursor:
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+                
+                # 获取列名
+                columns = [desc[0] for desc in cursor.description]
+                
+                # 获取所有数据
+                rows = cursor.fetchall()
+            
             connection.close()
+            
+            # 如果没有数据，返回空 DataFrame
+            if not rows:
+                return pd.DataFrame(columns=columns)
+            
+            # 转换为 DataFrame
+            df = pd.DataFrame(rows, columns=columns)
+            
             return df
+        
         except Exception as e:
             st.error(f"❌ 查询执行失败: {e}")
             return None
