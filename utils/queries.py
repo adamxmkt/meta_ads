@@ -5,6 +5,7 @@
 
 from typing import Optional
 import pandas as pd
+import streamlit as st
 from utils.db_connection import get_db_connection
 
 
