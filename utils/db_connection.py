@@ -7,7 +7,6 @@ import pymysql
 import pandas as pd
 from typing import Optional, List, Dict, Any
 import streamlit as st
-from functools import lru_cache
 
 
 class DatabaseConnection:
@@ -46,11 +45,12 @@ class DatabaseConnection:
                 password=self.password,
                 database=self.database,
                 charset=self.charset,
-                cursorclass=pymysql.cursors.DictCursor
+                cursorclass=pymysql.cursors.DictCursor,
+                connect_timeout=10
             )
             return connection
         except pymysql.Error as e:
-            st.error(f"数据库连接失败: {e}")
+            st.error(f"❌ 数据库连接失败: {e}")
             return None
     
     def execute_query(self, query: str, params: Optional[tuple] = None) -> Optional[List[Dict[str, Any]]]:
@@ -78,7 +78,7 @@ class DatabaseConnection:
             connection.close()
             return result
         except pymysql.Error as e:
-            st.error(f"查询执行失败: {e}")
+            st.error(f"❌ 查询执行失败: {e}")
             return None
     
     def query_to_dataframe(self, query: str, params: Optional[tuple] = None) -> Optional[pd.DataFrame]:
@@ -101,73 +101,66 @@ class DatabaseConnection:
             connection.close()
             return df
         except Exception as e:
-            st.error(f"查询执行失败: {e}")
+            st.error(f"❌ 查询执行失败: {e}")
             return None
 
 
-@st.cache_resource
 def get_db_connection() -> DatabaseConnection:
     """
-    获取缓存的数据库连接对象
-    使用 Streamlit 的缓存来避免重复创建连接
+    获取数据库连接对象
+    从 Streamlit Secrets 读取配置
     """
     try:
-        # 尝试从 Streamlit secrets 读取数据库配置
-        # 处理不同的 Secrets 格式
+        # 直接从 st.secrets 读取数据库配置
+        host = st.secrets.get("database_host") or st.secrets.get("host")
+        user = st.secrets.get("database_user") or st.secrets.get("user")
+        password = st.secrets.get("database_password") or st.secrets.get("password")
+        database = st.secrets.get("database_name") or st.secrets.get("database")
         
-        # 方式 1: 使用字典访问
-        if hasattr(st.secrets, "database"):
-            db_config = st.secrets["database"]
-        else:
-            # 方式 2: 使用 get 方法
-            db_config = st.secrets.get("database", {})
+        # 如果上面的方式都不行，尝试读取 [database] 表
+        if not all([host, user, password, database]):
+            try:
+                db_section = st.secrets["database"]
+                host = db_section.get("host") or host
+                user = db_section.get("user") or user
+                password = db_section.get("password") or password
+                database = db_section.get("database") or database
+            except (KeyError, TypeError):
+                pass
         
-        # 确保 db_config 是字典
-        if isinstance(db_config, str):
+        # 验证所有必要的字段都已配置
+        if not all([host, user, password, database]):
+            missing = []
+            if not host:
+                missing.append("host")
+            if not user:
+                missing.append("user")
+            if not password:
+                missing.append("password")
+            if not database:
+                missing.append("database")
+            
             st.error(
-                "❌ 数据库配置格式错误！\n\n"
-                "Secrets 应该是一个表 [database]，而不是字符串。\n\n"
-                "正确格式：\n"
-                "```\n"
-                "[database]\n"
-                "host = \"your_host\"\n"
-                "user = \"your_user\"\n"
-                "password = \"your_password\"\n"
-                "database = \"your_database\"\n"
-                "```"
+                f"❌ 数据库配置不完整！\n\n"
+                f"缺少以下字段：{', '.join(missing)}\n\n"
+                f"请在 Streamlit Cloud 的 Settings → Secrets 中添加：\n\n"
+                f"```\n"
+                f"[database]\n"
+                f"host = \"203.55.176.41\"\n"
+                f"user = \"fb_ads_admin\"\n"
+                f"password = \"your_password\"\n"
+                f"database = \"facebook_ads_data\"\n"
+                f"```"
             )
-            raise ValueError("数据库配置格式错误")
-        
-        # 如果没有配置，抛出错误
-        if not db_config or not isinstance(db_config, dict):
-            st.error(
-                "❌ 数据库配置未找到！\n\n"
-                "请在 Streamlit Cloud 的 Settings → Secrets 中添加：\n\n"
-                "```\n"
-                "[database]\n"
-                "host = \"203.55.176.41\"\n"
-                "user = \"fb_ads_admin\"\n"
-                "password = \"your_password\"\n"
-                "database = \"facebook_ads_data\"\n"
-                "```"
-            )
-            raise ValueError("数据库配置未找到或格式错误")
-        
-        # 检查必要的字段
-        required_fields = ["host", "user", "password", "database"]
-        missing_fields = [field for field in required_fields if field not in db_config]
-        
-        if missing_fields:
-            st.error(f"❌ 数据库配置缺少以下字段：{', '.join(missing_fields)}")
-            raise ValueError(f"数据库配置缺少字段：{missing_fields}")
+            raise ValueError(f"数据库配置不完整，缺少字段：{missing}")
         
         return DatabaseConnection(
-            host=db_config["host"],
-            user=db_config["user"],
-            password=db_config["password"],
-            database=db_config["database"]
+            host=host,
+            user=user,
+            password=password,
+            database=database
         )
     
     except Exception as e:
-        st.error(f"❌ 数据库连接配置错误：{str(e)}")
+        st.error(f"❌ 数据库配置读取失败：{str(e)}")
         raise
