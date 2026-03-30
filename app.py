@@ -99,19 +99,31 @@ def main():
         
         with col1:
             total_spend = daily_perf["total_spend"].sum()
-            st.metric("总支出", f"${total_spend:,.2f}")
+            if pd.notna(total_spend):
+                st.metric("总支出", f"${float(total_spend):,.2f}")
+            else:
+                st.metric("总支出", "N/A")
         
         with col2:
             total_impressions = daily_perf["total_impressions"].sum()
-            st.metric("总展示数", f"{total_impressions:,}")
+            if pd.notna(total_impressions):
+                st.metric("总展示数", f"{int(total_impressions):,}")
+            else:
+                st.metric("总展示数", "N/A")
         
         with col3:
             total_clicks = daily_perf["total_clicks"].sum()
-            st.metric("总点击数", f"{total_clicks:,}")
+            if pd.notna(total_clicks):
+                st.metric("总点击数", f"{int(total_clicks):,}")
+            else:
+                st.metric("总点击数", "N/A")
         
         with col4:
             avg_cpm = daily_perf["cpm"].mean()
-            st.metric("平均 CPM", f"${avg_cpm:.2f}")
+            if pd.notna(avg_cpm):
+                st.metric("平均 CPM", f"${float(avg_cpm):.2f}")
+            else:
+                st.metric("平均 CPM", "N/A")
         
         st.markdown("---")
         
@@ -119,6 +131,7 @@ def main():
         st.subheader("💰 每日支出趋势")
         daily_spend = daily_perf.groupby("report_date")["total_spend"].sum().reset_index()
         daily_spend = daily_spend.sort_values("report_date")
+        daily_spend["total_spend"] = daily_spend["total_spend"].astype(float)
         
         fig_spend = px.line(
             daily_spend,
@@ -138,6 +151,7 @@ def main():
         with col1:
             daily_impressions = daily_perf.groupby("report_date")["total_impressions"].sum().reset_index()
             daily_impressions = daily_impressions.sort_values("report_date")
+            daily_impressions["total_impressions"] = daily_impressions["total_impressions"].astype(int)
             
             fig_impressions = px.bar(
                 daily_impressions,
@@ -152,6 +166,7 @@ def main():
         with col2:
             daily_clicks = daily_perf.groupby("report_date")["total_clicks"].sum().reset_index()
             daily_clicks = daily_clicks.sort_values("report_date")
+            daily_clicks["total_clicks"] = daily_clicks["total_clicks"].astype(int)
             
             fig_clicks = px.bar(
                 daily_clicks,
