@@ -114,14 +114,22 @@ def get_db_connection() -> DatabaseConnection:
     # 从 Streamlit secrets 读取数据库配置
     db_config = st.secrets.get("database", {})
     
-    # 如果没有配置，使用默认值
+    # 如果没有配置，抛出错误
     if not db_config:
-        db_config = {
-            "host": "203.55.176.41",
-            "user": "fb_ads_admin",
-            "password": "ILqTmJb0Xaq7uxS6UulVoXgBZl8ytqcP",
-            "database": "facebook_ads_data"
-        }
+        st.error(
+            "❌ 数据库配置未找到！\n\n"
+            "请在 .streamlit/secrets.toml 中配置数据库信息：\n\n"
+            "```\n"
+            "[database]\n"
+            "host = \"your_host\"\n"
+            "user = \"your_user\"\n"
+            "password = \"your_password\"\n"
+            "database = \"your_database\"\n"
+            "```"
+        )
+        raise ValueError(
+            "数据库配置未找到。请在 .streamlit/secrets.toml 中配置数据库信息。"
+        )
     
     return DatabaseConnection(
         host=db_config.get("host"),
